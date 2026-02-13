@@ -4,7 +4,7 @@
 
 Noematics is a systems framework for representing, updating, and interpreting meaning as a first-class, stateful structure embedded in evolving communication graphs. It is designed for multi-agent and distributed systems where *what is meant* changes over time, across perspectives, and under structural drift.
 
-Unlike conventional graph, agent, or routing frameworks, Noematics treats **meaning itself**—not messages, tokens, or policies—as the core object of computation.
+Unlike conventional graph, agent, or routing frameworks, Noematics treats **meaning itself**—not just messages, tokens, or policies—as the core object of computation.
 
 ---
 
@@ -36,7 +36,7 @@ It introduces:
 - **Explicit separation of topology and interpretation**  
   Communication structure provides constraints; interpretation provides transformation.
 
-- **Invariant-preserving evolution**  
+- **Invariant-constrained evolution**  
   Meaning changes over time, but within formally stated system invariants.
 
 - **Observer-relative semantics without unconstrained subjectivity**  
@@ -72,7 +72,7 @@ Agents in Noematics are **not autonomous decision-makers**; they are **bounded s
 Noematics is a **general framework**.  
 DyTopo-style semantic routing is provided as a **reference instantiation**.
 
-Specifically, this repository includes an implementation of:
+Specifically, this repository includes a DyTopo-inspired reference implementation of:
 
 > **DyTopo: Dynamic Topology Routing for Multi-Agent Reasoning via Semantic Matching**  
 > Lu et al., arXiv:2602.06039

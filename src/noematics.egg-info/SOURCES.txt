@@ -9,3 +9,9 @@ src/noematics.egg-info/top_level.txt
 src/noematics/core/__init__.py
 src/noematics/core/interfaces.py
 src/noematics/core/mic.py
+src/noematics/llm/__init__.py
+src/noematics/llm/interpretation.py
+src/noematics/semantic/__init__.py
+src/noematics/semantic/encoder.py
+src/noematics/semantic/matcher.py
+src/noematics/semantic/topology.py
