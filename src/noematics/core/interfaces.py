@@ -19,7 +19,7 @@ class Field:
 @dataclass(frozen=True)
 class Message:
     sender_id: str
-    receiver_id: str
+    receiver_id: Optional[str]
     content: str
     round_number: int
 

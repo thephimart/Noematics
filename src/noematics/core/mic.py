@@ -26,14 +26,14 @@ class SimpleInterpreter:
             for msg in inp.received_messages:
                 routing_messages.append(Message(
                     sender_id=inp.noema.id,
-                    receiver_id="",  # Runtime assigns receivers exclusively
+                    receiver_id=None,  # Runtime assigns receivers exclusively
                     content=f"Ack: {msg.content}",
                     round_number=inp.round_context.round_number,
                 ))
         else:
             routing_messages.append(Message(
                 sender_id=inp.noema.id,
-                receiver_id="",  # Runtime assigns receivers exclusively
+                receiver_id=None,  # Runtime assigns receivers exclusively
                 content=f"[{inp.noema.id}] {inp.round_context.goal}",
                 round_number=inp.round_context.round_number,
             ))
