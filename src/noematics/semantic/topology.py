@@ -28,22 +28,33 @@ class DynamicTopology:
         queries = [f"{noema.query_vector} {goal}" for noema in noemata]
         keys = [noema.key_vector for noema in noemata]
 
-        adjacency = self.matcher.build_adjacency(queries, keys)
+        return self.build_routing_from_arrays(queries, keys, goal, context)
+
+    def build_routing_from_arrays(
+        self,
+        queries: List[str],
+        keys: List[str],
+        goal: str,
+        context: "RoundContext",
+    ) -> List[tuple[str, str]]:
+        """Build routing from query/key arrays (used by projection layer)."""
+        full_queries = [f"{q} {goal}" for q in queries]
+
+        adjacency = self.matcher.build_adjacency(full_queries, keys)
 
         edges = []
-        noema_ids = [n.id for n in noemata]
 
-        for k_idx in range(len(noemata)):
+        for k_idx in range(len(keys)):
             row = adjacency[k_idx]
             if self.config.retain_top_k is not None:
                 top_k_indices = np.argsort(row)[-self.config.retain_top_k :]
                 for q_idx in top_k_indices:
                     if row[q_idx] >= self.config.similarity_threshold:
-                        edges.append((noema_ids[q_idx], noema_ids[k_idx], row[q_idx]))
+                        edges.append((f"q{q_idx}", f"k{k_idx}", row[q_idx]))
             else:
-                for q_idx in range(len(noemata)):
+                for q_idx in range(len(queries)):
                     if row[q_idx] >= self.config.similarity_threshold:
-                        edges.append((noema_ids[q_idx], noema_ids[k_idx], row[q_idx]))
+                        edges.append((f"q{q_idx}", f"k{k_idx}", row[q_idx]))
 
         self._edge_history.append(edges)
         return [(src, tgt) for src, tgt, _ in edges]
