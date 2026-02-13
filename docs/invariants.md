@@ -101,3 +101,14 @@ Multiple interpretations within the same field and round MUST commute.
 | **agent** | Entity with perspective/agency — MUST have a role and execute tasks |
 | **field** | Collection of noemata with shared topology — NOT "cluster" or "group" |
 | **link** | Directed edge between noemata — NOT "edge", "connection", "wire" |
+
+---
+
+## Invariant Enforcement
+
+Violations of invariants MUST result in:
+- explicit runtime errors, or
+- failed tests, or
+- rejected state transitions.
+
+Silent degradation is not permitted.
