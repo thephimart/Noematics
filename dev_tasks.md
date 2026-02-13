@@ -1,5 +1,8 @@
 # Dev Tasks
 
+⚠️ If you are new to the project, start with `FIRST_STEPS.md`.
+Tasks here assume familiarity with the core constraints.
+
 ## Task A — Hardening Pass
 
 **Goal**: Transform philosophical principles into formal engineering constraints
