@@ -1,12 +1,379 @@
-# DyTopo Implementation Plan
+# Noematics Implementation Plan
 
 ## Executive Summary
 
-This document provides a comprehensive implementation plan for DyTopo (Dynamic Topology Routing for Multi-Agent Reasoning via Semantic Matching). The implementation is organized into 8 phases over 12 weeks, with clear deliverables, technical specifications, and risk mitigation strategies.
+This document provides a comprehensive implementation plan for Noematics — a framework for modeling how noēmata evolve over dynamic topologies. Based on the Noematics paper (arXiv:2602.06039), this implementation enables dynamic semantic routing between multiple LLM agents for improved multi-round reasoning tasks.
 
 ---
 
-## Table of Contents
+## Noematic Invariants
+
+These properties **MUST** hold in all valid system states. They transform philosophical principles into engineering constraints.
+
+### Structural Invariants
+
+1. **Field Membership**: A noema MUST belong to exactly one field at any instant
+   - Formal: `∀noema ∈ Noemata: |{f ∈ Fields : noema ∈ f}| = 1`
+   - Violation: Creates ambiguous authority and conflicting interpretations
+
+2. **Graph Connectivity**: Structural links MUST form a connected subgraph within a field
+   - Formal: `∀f ∈ Fields: subgraph(f.links) is connected`
+   - Violation: Isolated components cannot receive routed messages
+
+3. **Field Scope**: All structural links within a field MUST stay within that field's boundary
+   - Formal: `∀link ∈ f.links: link.source ∈ f ∧ link.target ∈ f`
+   - Violation: Cross-field links break isolation guarantees
+
+### Temporal Invariants
+
+4. **Causal Ordering**: Temporal updates MUST be monotonic in causal order
+   - Formal: `∀t1 < t2: state(t1) ⊆ state(t2)` (monotonic growth)
+   - Exception: Only explicit "retraction" operations may remove state
+   - Violation: Race conditions and inconsistent reads
+
+5. **Round Atomicity**: A round's interpretation MUST complete before the next round begins
+   - Formal: `∀round r: interpret(r) happens-before interpret(r+1)`
+   - Violation: Message ordering ambiguity
+
+### Interpretation Invariants
+
+6. **Interpretation Purity**: Interpretation is a pure function — same input descriptors MUST produce same output deltas
+   - Formal: `∀inputs: interpret(inputs) = f(inputs)` where `f` has no side effects
+   - Violation: Non-deterministic system behavior
+
+7. **Topology Read-Only Interpretation**: Interpretation MUST NOT mutate topology directly
+   - Formal: `∀noema: interpret(noema).topology_delta = ∅`
+   - Violation: Breaks separation of concerns; routing logic polluted
+
+8. **Delta Composition**: Multiple interpretations on the same round MUST commute
+   - Formal: `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)`
+   - Violation: Order-dependent results
+
+### Naming Conventions (Enforced)
+
+| Term | Usage |
+|------|-------|
+| **noema** | Semantic unit with query/key vectors — the fundamental atomic entity |
+| **node** | Network/graph vertex (use only in graph/network contexts) |
+| **agent** | Entity with perspective/agency — MUST have a role and execute tasks |
+| **field** | Collection of noemata with shared topology — NOT "cluster" or "group" |
+| **link** | Directed edge between noemata — NOT "edge", "connection", "wire" |
+
+---
+
+## Interpretation: Mechanical Specification
+
+Interpretation is the core operation of Noematics. Below is the algorithmic specification:
+
+### Definition
+
+```
+interpret(noema, round_context) → InterpretationDelta
+```
+
+### Properties
+
+| Property | Specification |
+|----------|---------------|
+| **Purity** | Pure function: `f(noema, ctx) → delta` with no side effects |
+| **Output** | Returns a **delta**, not full state — enables compositional reasoning |
+| **Idempotence** | `interpret(x) ∘ interpret(x) = interpret(x)` |
+| **Commutativity** | `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)` |
+
+### Data Structures
+
+```python
+@dataclass
+class InterpretationDelta:
+    """Delta produced by interpretation — never full state"""
+    query_delta: str          # What information is now needed (append-only)
+    key_delta: str            # What information is now offered (append-only)
+    field_membership: Optional[str] = None  # None = no change
+    metadata_delta: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class InterpretationInput:
+    """Complete input to interpretation function"""
+    noema: "Noema"
+    round_context: "RoundContext"
+    received_messages: List["AgentMessage"]
+    
+@dataclass  
+class InterpretationResult:
+    """Complete output of interpretation"""
+    delta: InterpretationDelta
+    local_state_update: Dict[str, Any]
+    messages_to_route: List["RoutingDecision"]
+```
+
+### Pseudocode Algorithm
+
+```
+function interpret(input: InterpretationInput) → InterpretationResult:
+    
+    # Step 1: Analyze received messages
+    relevant_info = extract_relevant_content(input.received_messages)
+    
+    # Step 2: Update local understanding (pure state transformation)
+    current_q = input.noema.query_vector
+    current_k = input.noema.key_vector
+    
+    new_q = refine_query(current_q, relevant_info, input.round_context.goal)
+    new_k = refine_key(current_k, relevant_info, input.round_context.goal)
+    
+    # Step 3: Determine information needs
+    information_gap = compute_information_gap(
+        new_q, 
+        input.round_context.goal,
+        input.received_messages
+    )
+    
+    # Step 4: Determine field membership (may be None = no change)
+    target_field = determine_field_membership(
+        new_k,
+        input.round_context.available_fields
+    )
+    
+    # Step 5: Build routing decisions
+    routing = determine_routing_targets(
+        information_gap,
+        input.round_context.neighbor_noemata
+    )
+    
+    # Step 6: Compose delta
+    delta = InterpretationDelta(
+        query_delta=diff(current_q, new_q),      # What changed in query
+        key_delta=diff(current_k, new_k),        # What changed in key
+        field_membership=target_field,           # May be None
+        metadata_delta={"round": input.round_context.round_number}
+    )
+    
+    return InterpretationResult(
+        delta=delta,
+        local_state_update={"query": new_q, "key": new_k},
+        messages_to_route=routing
+    )
+```
+
+### Conflict Resolution
+
+When multiple interpretations produce conflicting field memberships:
+
+```
+resolve_conflict(deltas: List[InterpretationDelta]) → InterpretationDelta:
+    
+    # Priority: explicit field_membership > None
+    non_null = [d for d in deltas if d.field_membership is not None]
+    
+    if len(non_null) == 0:
+        return merge_deltas(deltas)  # All None = no conflict
+    elif len(non_null) == 1:
+        return non_null[0]
+    else:
+        # Multiple explicit memberships — use highest round number
+        return max(non_null, key=lambda d: d.metadata_delta.get("round", 0))
+```
+
+---
+
+## Minimal Implementable Core (MIC)
+
+For contributors, a first success milestone is critical. This defines the smallest set of components that can run end-to-end without agents, learning, or visualization.
+
+### MIC Scope
+
+| Component | Included? | Rationale |
+|-----------|-----------|-----------|
+| Noema data structure | ✅ Yes | Core entity |
+| Static field | ✅ Yes | Simplest topology |
+| Static routing (no semantic matching) | ✅ Yes | No embeddings needed |
+| Round execution loop | ✅ Yes | Core orchestration |
+| Message passing | ✅ Yes | Communication primitive |
+| Agent abstraction | ❌ No | Deferred to Phase 2 |
+| Semantic encoder | ❌ No | Deferred to Phase 1 |
+| Manager/goal setting | ❌ No | Deferred to Phase 2 |
+| Visualization | ❌ No | Deferred to Phase 5 |
+| Learning/adaptation | ❌ No | Deferred to Phase 6 |
+
+### MIC Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Minimal Noematics                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────────┐    ┌─────────┐    ┌─────────┐               │
+│   │ Noema A │───▶│ Noema B │───▶│ Noema C │               │
+│   └─────────┘    └─────────┘    └─────────┘               │
+│        │              │              │                     │
+│        ▼              ▼              ▼                     │
+│   ┌─────────────────────────────────────────┐             │
+│   │           Static Routing Table           │             │
+│   │     (predefined edges, no matching)      │             │
+│   └─────────────────────────────────────────┘             │
+│                      │                                      │
+│                      ▼                                      │
+│   ┌─────────────────────────────────────────┐             │
+│   │           Round Execution Loop           │             │
+│   │  1. Each noema produces message          │             │
+│   │  2. Messages routed along edges          │             │
+│   │  3. Each noema interprets received       │             │
+│   │  4. Check termination condition          │             │
+│   └─────────────────────────────────────────┘             │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### MIC Implementation (Pseudocode)
+
+```python
+# mic_core.py — Under 200 lines
+
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+from enum import Enum
+
+class TerminationReason(Enum):
+    MAX_ROUNDS = "max_rounds"
+    CONSENSUS = "consensus"
+    STABLE = "stable"
+
+@dataclass
+class Noema:
+    """Minimal noema with query/key vectors"""
+    id: str
+    query_vector: str
+    key_vector: str
+    private_state: Dict = field(default_factory=dict)
+
+@dataclass
+class Message:
+    """Simple message between noemata"""
+    sender_id: str
+    receiver_id: str
+    content: str
+    round_number: int
+
+@dataclass
+class RoutingTable:
+    """Static routing — predefined edges"""
+    edges: List[tuple[str, str]]  # (source_id, target_id)
+
+    def get_targets(self, source_id: str) -> List[str]:
+        return [target for src, target in self.edges if src == source_id]
+
+@dataclass
+class RoundContext:
+    """Round metadata"""
+    round_number: int
+    goal: str
+    messages: List[Message] = field(default_factory=list)
+
+class NoemaAgent:
+    """Minimal agent — just produces a message"""
+    
+    def __init__(self, noema: Noema):
+        self.noema = noema
+    
+    def produce_message(self, context: RoundContext) -> Message:
+        # Simple: just echo goal + current state
+        content = f"[{self.noema.id}] Processing: {context.goal}"
+        return Message(
+            sender_id=self.noema.id,
+            receiver_id="",  # Set by router
+            content=content,
+            round_number=context.round_number
+        )
+    
+    def interpret(self, received: List[Message], context: RoundContext):
+        # Minimal interpretation: just log
+        for msg in received:
+            self.noema.private_state[msg.sender_id] = msg.content
+
+class MICRuntime:
+    """Minimal execution engine"""
+    
+    def __init__(self, noemata: List[Noema], routing: RoutingTable):
+        self.noemata = {n.id: n for n in noemata}
+        self.agents = {n.id: NoemaAgent(n) for n in noemata}
+        self.routing = routing
+        self.messages: List[Message] = []
+        self.round_number = 0
+    
+    def run(self, goal: str, max_rounds: int = 5) -> Dict:
+        for round_num in range(1, max_rounds + 1):
+            self.round_number = round_num
+            context = RoundContext(round_number=round_num, goal=goal)
+            
+            # Phase 1: Each agent produces a message
+            round_messages = []
+            for agent in self.agents.values():
+                msg = agent.produce_message(context)
+                # Route to all targets
+                for target_id in self.routing.get_targets(agent.noema.id):
+                    routed_msg = Message(
+                        sender_id=msg.sender_id,
+                        receiver_id=target_id,
+                        content=msg.content,
+                        round_number=round_num
+                    )
+                    round_messages.append(routed_msg)
+            
+            # Phase 2: Deliver messages
+            received_by_agent: Dict[str, List[Message]] = {nid: [] for nid in self.noemata}
+            for msg in round_messages:
+                received_by_agent[msg.receiver_id].append(msg)
+            
+            # Phase 3: Each agent interprets received messages
+            for agent in self.agents.values():
+                agent.interpret(received_by_agent[agent.noema.id], context)
+            
+            self.messages.extend(round_messages)
+        
+        return {
+            "rounds_completed": max_rounds,
+            "total_messages": len(self.messages),
+            "final_states": {nid: a.noema.private_state for nid, a in self.agents.items()}
+        }
+```
+
+### MIC Test
+
+```python
+# tests/mic/test_minimal_core.py
+
+def test_mic_runs_end_to_end():
+    # Setup: 3 noemata in a chain
+    noemata = [
+        Noema(id="A", query_vector="start", key_vector="initial"),
+        Noema(id="B", query_vector="process", key_vector="middle"),
+        Noema(id="C", query_vector="complete", key_vector="end"),
+    ]
+    
+    # Static routing: A → B → C
+    routing = RoutingTable(edges=[("A", "B"), ("B", "C")])
+    
+    # Run
+    runtime = MICRuntime(noemata, routing)
+    result = runtime.run(goal="Process data", max_rounds=3)
+    
+    # Assert
+    assert result["rounds_completed"] == 3
+    assert result["total_messages"] == 6  # 2 edges × 3 rounds
+    assert "B" in result["final_states"]["A"]  # A received from B
+    assert "C" in result["final_states"]["B"]  # B received from C
+    
+    print("MIC test passed!")
+```
+
+### Success Criteria for MIC
+
+- [ ] Unit tests pass
+- [ ] Can run 10 rounds with 10 noemata without error
+- [ ] Message delivery is correct (verified by test)
+- [ ] Execution completes in < 1 second for MIC scale
+
+Once MIC is complete, contributors have a working baseline to extend.
 1. [Project Overview](#project-overview)
 2. [Technical Architecture](#technical-architecture)
 3. [Implementation Phases](#implementation-phases)
@@ -21,7 +388,7 @@ This document provides a comprehensive implementation plan for DyTopo (Dynamic T
 ## Project Overview
 
 ### Objective
-Implement a production-ready DyTopo framework that enables dynamic semantic routing between multiple LLM agents for improved multi-round reasoning tasks.
+Implement a production-ready Noematics framework that enables dynamic semantic routing between multiple LLM agents for improved multi-round reasoning tasks.
 
 ### Key Features
 - Dynamic communication graph construction via semantic matching
@@ -97,7 +464,7 @@ graph TB
 - [ ] Configuration management system
 
 **Deliverables**:
-- `src/dytopo/llm/` module with base classes
+- `src/noematics/` module with base classes
 - Support for 2 LLM backends
 - Unit tests for LLM integration
 
@@ -105,7 +472,7 @@ graph TB
 
 **Core Classes and Interfaces**:
 ```python
-# src/dytopo/llm/base.py
+# src/noematics/llm/base.py
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, AsyncGenerator
 from dataclasses import dataclass
@@ -146,7 +513,7 @@ class LLMBackend(ABC):
 
 **OpenAI Backend Implementation**:
 ```python
-# src/dytopo/llm/openai.py
+# src/noematics/llm/openai.py
 class OpenAIBackend(LLMBackend):
     def __init__(self, api_key: str, model: str = "gpt-4"):
         self.client = AsyncOpenAI(api_key=api_key)
@@ -177,7 +544,7 @@ class OpenAIBackend(LLMBackend):
 
 **External API Backend Implementation**:
 ```python
-# src/dytopo/llm/external.py
+# src/noematics/llm/external.py
 import httpx
 import asyncio
 from typing import Optional
@@ -274,7 +641,7 @@ class ExternalAPIBackend(LLMBackend):
 
 **Error Handling and Retry Logic**:
 ```python
-# src/dytopo/llm/utils.py
+# src/noematics/llm/utils.py
 import asyncio
 from typing import TypeVar, Callable, Any
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -319,7 +686,7 @@ async def robust_llm_call(
 
 **Configuration Management**:
 ```python
-# src/dytopo/core/config.py
+# src/noematics/core/config.py
 from pydantic import BaseSettings, Field
 from typing import Optional
 
@@ -356,15 +723,15 @@ class LLMConfig(BaseSettings):
 # tests/unit/test_llm_integration.py
 import pytest
 from unittest.mock import AsyncMock, patch
-from dytopo.llm.openai import OpenAIBackend
-from dytopo.llm.base import LLMRequest, LLMResponse
+from noematics.llm.openai import OpenAIBackend
+from noematics.llm.base import LLMRequest, LLMResponse
 
 @pytest.mark.asyncio
 async def test_openai_backend_success():
     """Test successful OpenAI API call"""
     backend = OpenAIBackend(api_key="test_key", model="gpt-3.5-turbo")
     
-    with patch('dytopo.llm.openai.AsyncOpenAI') as mock_openai:
+    with patch('noematics.llm.openai.AsyncOpenAI') as mock_openai:
         mock_response = AsyncMock()
         mock_response.choices = [AsyncMock()]
         mock_response.choices[0].message.content = "Test response"
@@ -386,7 +753,7 @@ async def test_retry_mechanism():
     """Test retry logic for rate limiting"""
     backend = OpenAIBackend(api_key="test_key")
     
-    with patch('dytopo.llm.openai.AsyncOpenAI') as mock_openai:
+    with patch('noematics.llm.openai.AsyncOpenAI') as mock_openai:
         # First call fails with rate limit, second succeeds
         mock_openai.return_value.chat.completions.create.side_effect = [
             Exception("Rate limit exceeded"),
@@ -405,7 +772,7 @@ async def test_retry_mechanism():
 # tests/benchmarks/test_llm_performance.py
 import time
 import asyncio
-from dytopo.llm.openai import OpenAIBackend
+from noematics.llm.openai import OpenAIBackend
 
 async def benchmark_llm_latency():
     """Benchmark LLM response latency"""
@@ -448,7 +815,7 @@ async def benchmark_llm_latency():
 - [ ] Pydantic models for structured validation
 
 **Deliverables**:
-- `src/dytopo/semantic/` module
+- `src/noematics/semantic/` module
 - Complete data model definitions
 - Embedding benchmark suite
 
@@ -456,7 +823,7 @@ async def benchmark_llm_latency():
 
 **Semantic Encoder Interface**:
 ```python
-# src/dytopo/semantic/encoder.py
+# src/noematics/semantic/encoder.py
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 import numpy as np
@@ -506,7 +873,7 @@ class SentenceTransformerEncoder(SemanticEncoder):
 
 **Similarity Matcher Implementation**:
 ```python
-# src/dytopo/semantic/matcher.py
+# src/noematics/semantic/matcher.py
 import numpy as np
 from typing import List, Tuple, Dict
 from dataclasses import dataclass
@@ -621,7 +988,7 @@ class SemanticMatcher:
 
 **Advanced Semantic Features**:
 ```python
-# src/dytopo/semantic/advanced.py
+# src/noematics/semantic/advanced.py
 import numpy as np
 from typing import List, Dict, Optional
 from sklearn.decomposition import PCA
@@ -723,7 +1090,7 @@ class AdvancedSemanticMatcher(SemanticMatcher):
 
 **Performance Optimization**:
 ```python
-# src/dytopo/semantic/performance.py
+# src/noematics/semantic/performance.py
 import time
 import asyncio
 from typing import List, Callable
@@ -794,8 +1161,8 @@ class OptimizedSemanticMatcher(SemanticMatcher):
 import pytest
 import numpy as np
 from unittest.mock import AsyncMock, patch
-from dytopo.semantic.encoder import SentenceTransformerEncoder
-from dytopo.semantic.matcher import SemanticMatcher, MatchResult
+from noematics.semantic.encoder import SentenceTransformerEncoder
+from noematics.semantic.matcher import SemanticMatcher, MatchResult
 
 @pytest.fixture
 async def semantic_encoder():
@@ -893,8 +1260,8 @@ async def test_caching_behavior(semantic_encoder):
 import asyncio
 import time
 import numpy as np
-from dytopo.semantic.encoder import SentenceTransformerEncoder
-from dytopo.semantic.matcher import SemanticMatcher
+from noematics.semantic.encoder import SentenceTransformerEncoder
+from noematics.semantic.matcher import SemanticMatcher
 
 async def benchmark_embedding_speed():
     """Benchmark embedding generation speed"""
@@ -972,7 +1339,7 @@ if __name__ == "__main__":
 - [ ] Structured output parsing (JSON extraction)
 
 **Deliverables**:
-- `src/dytopo/agents/` module
+- `src/noematics/agents/` module
 - Prompt template framework
 - JSON parsing utilities
 
@@ -992,15 +1359,15 @@ if __name__ == "__main__":
 
 **Core Agent Base Classes**:
 ```python
-# src/dytopo/agents/base.py
+# src/noematics/agents/base.py
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import re
-from dytopo.llm.base import LLMBackend, LLMRequest, LLMResponse
-from dytopo.core.types import AgentMessage
+from noematics.llm.base import LLMBackend, LLMRequest, LLMResponse
+from noematics.core.types import AgentMessage
 
 @dataclass
 class AgentConfig:
@@ -1244,7 +1611,7 @@ RESPONSE FORMAT:
 
 **Prompt Template System**:
 ```python
-# src/dytopo/agents/templates.py
+# src/noematics/agents/templates.py
 from typing import Dict, Optional
 from pathlib import Path
 import json
@@ -1300,7 +1667,7 @@ GUIDELINES:
 
 **Role-Specific Agent Implementations**:
 ```python
-# src/dytopo/agents/roles/code_generation.py
+# src/noematics/agents/roles/code_generation.py
 from ..base import WorkerAgent
 from ..templates import PromptTemplateManager
 
@@ -1402,7 +1769,7 @@ Use modern design patterns and principles.
 """
 
 # Mathematical reasoning roles
-# src/dytopo/agents/roles/math_reasoning.py
+# src/noematics/agents/roles/math_reasoning.py
 
 class ProblemParserAgent(WorkerAgent):
     """Problem parser for mathematical reasoning"""
@@ -1484,7 +1851,7 @@ Your primary focus is on ensuring mathematical accuracy and logical validity.
 
 **Agent Factory**:
 ```python
-# src/dytopo/agents/factory.py
+# src/noematics/agents/factory.py
 from typing import Dict, Type, List
 from ..base import Agent, AgentConfig
 from ..roles.code_generation import DeveloperAgent, ResearcherAgent, TesterAgent, DesignerAgent
@@ -1556,7 +1923,7 @@ class AgentFactory:
         return list(cls.AGENT_REGISTRY.keys())
 
 # Context memory management
-# src/dytopo/agents/memory.py
+# src/noematics/agents/memory.py
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 import tiktoken
@@ -1621,7 +1988,7 @@ class ContextMemory:
 
 **Structured Output Parsing**:
 ```python
-# src/dytopo/agents/parsers.py
+# src/noematics/agents/parsers.py
 import json
 import re
 from typing import Dict, Any, Optional
@@ -1776,9 +2143,9 @@ class ResponseParser:
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
-from dytopo.agents.base import Agent, WorkerAgent, ManagerAgent, AgentConfig
-from dytopo.agents.factory import AgentFactory
-from dytopo.agents.parsers import ResponseParser
+from noematics.agents.base import Agent, WorkerAgent, ManagerAgent, AgentConfig
+from noematics.agents.factory import AgentFactory
+from noematics.agents.parsers import ResponseParser
 
 @pytest.fixture
 def mock_llm_backend():
@@ -1995,7 +2362,7 @@ class TestContextMemory:
     
     def test_context_addition(self):
         """Test adding context to memory"""
-        from dytopo.agents.memory import ContextMemory, MemoryConfig
+        from noematics.agents.memory import ContextMemory, MemoryConfig
         
         config = MemoryConfig(max_context_tokens=1000, summary_threshold=500)
         memory = ContextMemory(config)
@@ -2010,7 +2377,7 @@ class TestContextMemory:
     
     def test_context_retrieval(self):
         """Test retrieving effective context"""
-        from dytopo.agents.memory import ContextMemory, MemoryConfig
+        from noematics.agents.memory import ContextMemory, MemoryConfig
         
         config = MemoryConfig()
         memory = ContextMemory(config)
@@ -2024,7 +2391,7 @@ class TestContextMemory:
     
     def test_memory_clear(self):
         """Test clearing memory"""
-        from dytopo.agents.memory import ContextMemory, MemoryConfig
+        from noematics.agents.memory import ContextMemory, MemoryConfig
         
         config = MemoryConfig()
         memory = ContextMemory(config)
@@ -2060,7 +2427,7 @@ class TestContextMemory:
 - [ ] Graph validation utilities
 
 **Deliverables**:
-- `src/dytopo/graph/` module
+- `src/noematics/graph/` module
 - Graph construction pipeline
 - Performance benchmarks
 
@@ -2080,13 +2447,13 @@ class TestContextMemory:
 
 **Graph Builder Implementation**:
 ```python
-# src/dytopo/graph/builder.py
+# src/noematics/graph/builder.py
 import numpy as np
 import networkx as nx
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from dytopo.semantic.matcher import SemanticMatcher, MatchResult
-from dytopo.core.types import AgentMessage, CommunicationGraph
+from noematics.semantic.matcher import SemanticMatcher, MatchResult
+from noematics.core.types import AgentMessage, CommunicationGraph
 
 @dataclass
 class GraphConfig:
@@ -2257,7 +2624,7 @@ class DynamicGraphBuilder:
 
 **Topological Ordering System**:
 ```python
-# src/dytopo/graph/topology.py
+# src/noematics/graph/topology.py
 import numpy as np
 import networkx as nx
 from typing import List, Optional, Tuple
@@ -2399,7 +2766,7 @@ class TopologicalSorter:
 
 **Advanced Graph Features**:
 ```python
-# src/dytopo/graph/advanced.py
+# src/noematics/graph/advanced.py
 import numpy as np
 import networkx as nx
 from typing import List, Dict, Optional, Tuple
@@ -2571,9 +2938,9 @@ class AdvancedGraphAnalyzer:
 import pytest
 import numpy as np
 from unittest.mock import AsyncMock
-from dytopo.graph.builder import DynamicGraphBuilder, GraphConfig
-from dytopo.graph.topology import TopologicalSorter
-from dytopo.core.types import AgentMessage
+from noematics.graph.builder import DynamicGraphBuilder, GraphConfig
+from noematics.graph.topology import TopologicalSorter
+from noematics.core.types import AgentMessage
 
 @pytest.fixture
 def mock_matcher():
@@ -2743,8 +3110,8 @@ def test_performance_large_graphs():
 @pytest.mark.asyncio
 async def test_advanced_graph_features():
     """Test advanced graph analysis features"""
-    from dytopo.graph.advanced import AdvancedGraphAnalyzer
-    from dytopo.core.types import CommunicationGraph
+    from noematics.graph.advanced import AdvancedGraphAnalyzer
+    from noematics.core.types import CommunicationGraph
     
     analyzer = AdvancedGraphAnalyzer()
     
@@ -2807,7 +3174,7 @@ async def test_advanced_graph_features():
 - [ ] Error recovery mechanisms
 
 **Deliverables**:
-- `src/dytopo/sync/` module
+- `src/noematics/sync/` module
 - Async execution framework
 - Concurrency tests
 
@@ -2827,7 +3194,7 @@ async def test_advanced_graph_features():
 
 **Synchronization Coordinator**:
 ```python
-# src/dytopo/sync/coordinator.py
+# src/noematics/sync/coordinator.py
 import asyncio
 from typing import List, Dict, Optional, Callable, Any
 from dataclasses import dataclass, field
@@ -3069,7 +3436,7 @@ class TimeoutManager:
 
 **Barrier Implementation**:
 ```python
-# src/dytopo/sync/barrier.py
+# src/noematics/sync/barrier.py
 import asyncio
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
@@ -3216,7 +3583,7 @@ class BarrierManager:
 
 **Advanced Error Recovery**:
 ```python
-# src/dytopo/sync/recovery.py
+# src/noematics/sync/recovery.py
 import asyncio
 from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
@@ -3470,9 +3837,9 @@ class CircuitBreaker:
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
-from dytopo.sync.coordinator import SynchronizationCoordinator, ExecutionStatus
-from dytopo.sync.barrier import BarrierManager, BarrierConfig
-from dytopo.sync.recovery import ErrorRecoveryManager, RecoveryConfig, RecoveryAction
+from noematics.sync.coordinator import SynchronizationCoordinator, ExecutionStatus
+from noematics.sync.barrier import BarrierManager, BarrierConfig
+from noematics.sync.recovery import ErrorRecoveryManager, RecoveryConfig, RecoveryAction
 
 class TestSynchronizationCoordinator:
     """Test synchronization coordinator functionality"""
@@ -3797,7 +4164,7 @@ class TestCircuitBreaker:
 
 **Synchronization Barrier (Section 3.2.2)**:
 ```python
-# src/dytopo/sync/synchronization.py
+# src/noematics/sync/synchronization.py
 import asyncio
 from typing import List, Dict, Set, Optional
 from dataclasses import dataclass, field
@@ -3894,7 +4261,7 @@ class SynchronizationBarrier:
 
 **Message Aggregator (Section 3.2.2, 3.4)**:
 ```python
-# src/dytopo/sync/aggregator.py
+# src/noematics/sync/aggregator.py
 import numpy as np
 from typing import List, Dict, Tuple
 from dataclasses import dataclass
@@ -4035,7 +4402,7 @@ class MessageAggregator:
 
 **Manager Policy (Section 3.5)**:
 ```python
-# src/dytopo/agents/manager_policy.py
+# src/noematics/agents/manager_policy.py
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -4218,7 +4585,7 @@ class ManagerPolicy:
 - ManagerPolicy class with evaluation function
 - GlobalState aggregation
 - Halting criteria matching paper (code: code + tests; math: solution + verification)
-- End-to-end DyTopo framework
+- End-to-end Noematics framework
 - Main execution loop (Algorithm 1 in paper)
 
 #### Week 10: Framework Integration (Algorithm 1 alignment)
@@ -4230,7 +4597,7 @@ class ManagerPolicy:
 - [ ] Logging and monitoring
 
 **Deliverables**:
-- Complete DyTopo framework matching paper Algorithm 1
+- Complete Noematics framework matching paper Algorithm 1
 - Integration tests
 - Performance benchmarks
 
@@ -4247,7 +4614,7 @@ class ManagerPolicy:
 - [ ] Export capabilities (JSON, PNG)
 
 **Deliverables**:
-- `src/dytopo/viz/` module
+- `src/noematics/viz/` module
 - Interactive visualization tools
 - Monitoring dashboard
 
@@ -4255,7 +4622,7 @@ class ManagerPolicy:
 
 **Comprehensive Logging System**:
 ```python
-# src/dytopo/monitoring/logging.py
+# src/noematics/monitoring/logging.py
 import logging
 import sys
 import json
@@ -4286,7 +4653,7 @@ class LogEntry:
     trace_id: Optional[str] = None
 
 class StructuredLogger:
-    """Structured logging for DyTopo framework"""
+    """Structured logging for Noematics framework"""
     
     def __init__(self, name: str, log_dir: str = "./logs"):
         self.name = name
@@ -4436,7 +4803,7 @@ class StructuredLogger:
             handler.flush()
             handler.close()
 
-class DyTopoLogger:
+class NoematicsLogger:
     """Framework-level logger with component tracking"""
     
     def __init__(self, log_dir: str = "./logs"):
@@ -4445,12 +4812,12 @@ class DyTopoLogger:
         self.log_dir.mkdir(exist_ok=True)
         
         # Create component loggers
-        self.loggers['framework'] = StructuredLogger('dytopo.framework', str(self.log_dir))
-        self.loggers['agents'] = StructuredLogger('dytopo.agents', str(self.log_dir))
-        self.loggers['semantic'] = StructuredLogger('dytopo.semantic', str(self.log_dir))
-        self.loggers['graph'] = StructuredLogger('dytopo.graph', str(self.log_dir))
-        self.loggers['sync'] = StructuredLogger('dytopo.sync', str(self.log_dir))
-        self.loggers['llm'] = StructuredLogger('dytopo.llm', str(self.log_dir))
+        self.loggers['framework'] = StructuredLogger('noematics.framework', str(self.log_dir))
+        self.loggers['agents'] = StructuredLogger('noematics.agents', str(self.log_dir))
+        self.loggers['semantic'] = StructuredLogger('noematics.semantic', str(self.log_dir))
+        self.loggers['graph'] = StructuredLogger('noematics.graph', str(self.log_dir))
+        self.loggers['sync'] = StructuredLogger('noematics.sync', str(self.log_dir))
+        self.loggers['llm'] = StructuredLogger('noematics.llm', str(self.log_dir))
     
     def get_logger(self, component: str) -> StructuredLogger:
         """Get logger for specific component"""
@@ -4462,12 +4829,12 @@ class DyTopoLogger:
             logger.shutdown()
 
 # Global logger instance
-global_logger = DyTopoLogger()
+global_logger = NoematicsLogger()
 ```
 
 **Metrics Collection System**:
 ```python
-# src/dytopo/monitoring/metrics.py
+# src/noematics/monitoring/metrics.py
 import time
 import psutil
 import threading
@@ -4667,7 +5034,7 @@ def track_time(metric_name: str):
 
 **Graph Visualization System**:
 ```python
-# src/dytopo/viz/graph_viz.py
+# src/noematics/viz/graph_viz.py
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -4675,7 +5042,7 @@ import networkx as nx
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass
-from dytopo.core.types import CommunicationGraph
+from noematics.core.types import CommunicationGraph
 
 @dataclass
 class VisualizationConfig:
@@ -4984,7 +5351,7 @@ class InteractiveDashboard:
             self.app = dash.Dash(__name__)
             
             self.app.layout = html.Div([
-                html.H1("DyTopo Dashboard", style={'textAlign': 'center'}),
+                html.H1("Noematics Dashboard", style={'textAlign': 'center'}),
                 
                 # Metrics row
                 html.Div([
@@ -5118,7 +5485,7 @@ class InteractiveDashboard:
 
 **Debug Mode and Tracing**:
 ```python
-# src/dytopo/monitoring/debug.py
+# src/noematics/monitoring/debug.py
 import traceback
 import uuid
 from typing import Dict, List, Optional, Any
@@ -5331,9 +5698,9 @@ import pytest
 import asyncio
 import time
 from unittest.mock import patch, MagicMock
-from dytopo.monitoring.logging import StructuredLogger, DyTopoLogger, LogLevel
-from dytopo.monitoring.metrics import MetricsCollector, metrics_collector
-from dytopo.viz.graph_viz import GraphVisualizer, VisualizationConfig
+from noematics.monitoring.logging import StructuredLogger, NoematicsLogger, LogLevel
+from noematics.monitoring.metrics import MetricsCollector, metrics_collector
+from noematics.viz.graph_viz import GraphVisualizer, VisualizationConfig
 
 class TestStructuredLogger:
     """Test structured logging functionality"""
@@ -5424,7 +5791,7 @@ class TestGraphVisualizer:
     
     @pytest.fixture
     def sample_graph(self):
-        from dytopo.core.types import CommunicationGraph
+        from noematics.core.types import CommunicationGraph
         
         adjacency = np.array([
             [0.0, 0.5, 0.0],
@@ -5468,7 +5835,7 @@ class TestGraphVisualizer:
     
     def test_communication_flow_heatmap(self, visualizer):
         """Test communication flow heatmap"""
-        from dytopo.core.types import CommunicationGraph
+        from noematics.core.types import CommunicationGraph
         
         graphs = []
         for i in range(3):
@@ -5510,7 +5877,7 @@ class TestDebugTracer:
     @pytest.fixture
     def tracer(self, tmp_path):
         # Create tracer with temp output directory
-        from dytopo.monitoring.debug import DebugTracer
+        from noematics.monitoring.debug import DebugTracer
         return DebugTracer(str(tmp_path))
     
     def test_trace_lifecycle(self, tracer):
@@ -5574,16 +5941,16 @@ The paper evaluates against several baselines that must be implemented:
 
 **Random Topology Baseline**:
 ```python
-# src/dytopo/baselines/random_topology.py
+# src/noematics/baselines/random_topology.py
 import numpy as np
 from typing import List
-from dytopo.graph.builder import DynamicGraphBuilder
+from noematics.graph.builder import DynamicGraphBuilder
 
 class RandomTopologyBaseline:
     """Random Topology baseline (paper Section 4.2)
     
     Controls for effect of graph sparsity by randomizing
-    edge connections while maintaining same sparsity level as DyTopo.
+    edge connections while maintaining same sparsity level as Noematics.
     """
     
     def __init__(self, similarity_threshold: float = 0.3):
@@ -5594,7 +5961,7 @@ class RandomTopologyBaseline:
         agent_count: int,
         target_edge_count: int
     ) -> np.ndarray:
-        """Build random graph with same sparsity as DyTopo"""
+        """Build random graph with same sparsity as Noematics"""
         matrix = np.zeros((agent_count, agent_count))
         
         # Generate random edges
@@ -5616,7 +5983,7 @@ class RandomTopologyBaseline:
 
 **Static Topology Baseline**:
 ```python
-# src/dytopo/baselines/static_topology.py
+# src/noematics/baselines/static_topology.py
 import numpy as np
 from typing import List
 from enum import Enum
@@ -5678,9 +6045,9 @@ class StaticTopologyBaseline:
 
 **AgentScope Baseline**:
 ```python
-# src/dytopo/baselines/agentscope.py
+# src/noematics/baselines/agentscope.py
 from typing import List, Dict, Any
-from dytopo.agents.base import Agent
+from noematics.agents.base import Agent
 
 class AgentScopeBaseline:
     """AgentScope baseline (paper Section 4.2)
@@ -5727,12 +6094,12 @@ class AgentScopeBaseline:
 ```python
 # tests/integration/test_baselines.py
 import pytest
-from dytopo.baselines.random_topology import RandomTopologyBaseline
-from dytopo.baselines.static_topology import StaticTopologyBaseline
-from dytopo.baselines.agentscope import AgentScopeBaseline
+from noematics.baselines.random_topology import RandomTopologyBaseline
+from noematics.baselines.static_topology import StaticTopologyBaseline
+from noematics.baselines.agentscope import AgentScopeBaseline
 
 def test_random_topology_sparsity():
-    """Random topology should match DyTopo sparsity"""
+    """Random topology should match Noematics sparsity"""
     baseline = RandomTopologyBaseline()
     graph = baseline.build_random_graph(agent_count=4, target_edge_count=6)
     
@@ -5855,11 +6222,11 @@ class AgentState:
 ### API Design
 
 ```python
-class DyTopoFramework:
+class NoematicsFramework:
     """Main framework interface"""
     
     def __init__(self, 
-                 config: DyTopoConfig,
+                 config: NoematicsConfig,
                  llm_backend: LLMBackend,
                  semantic_encoder: SemanticEncoder):
         """Initialize framework with configuration"""
@@ -5883,7 +6250,7 @@ class DyTopoFramework:
 
 ```python
 @dataclass
-class DyTopoConfig:
+class NoematicsConfig:
     """Framework configuration (aligned with paper Appendix B.2)"""
     
     # LLM Configuration
@@ -5965,9 +6332,9 @@ mypy = "^1.3.0"
 ### Project Structure
 
 ```
-dytopo/
+noematics/
 ├── src/
-│   └── dytopo/
+│   └── noematics/
 │       ├── __init__.py
 │       ├── core/
 │       │   ├── __init__.py
@@ -6046,7 +6413,7 @@ test_message_routing.py         # Communication logic
 
 # Integration Tests  
 test_agent_coordination.py       # Multi-agent workflows
-test_dytopo_framework.py        # End-to-end execution
+test_noematics_framework.py        # End-to-end execution
 test_performance.py            # Speed and scalability
 
 # Benchmark Tests
@@ -6161,15 +6528,15 @@ test_scalability.py            # Large-scale agent testing
 ### A. Reference Implementation Examples
 
 ```python
-# Example: Simple DyTopo Execution
+# Example: Simple Noematics Execution
 async def main():
-    config = DyTopoConfig(
+    config = NoematicsConfig(
         llm_backend="openai",
         model_name="gpt-4",
         similarity_threshold=0.3
     )
     
-    framework = DyTopoFramework(
+    framework = NoematicsFramework(
         config=config,
         llm_backend=OpenAIBackend(config),
         semantic_encoder=SentenceTransformerEncoder()
@@ -6201,7 +6568,7 @@ async def main():
 
 ```mermaid
 gantt
-    title DyTopo Implementation Timeline
+    title Noematics Implementation Timeline
     dateFormat  YYYY-MM-DD
     section Phase 1
     Project Setup           :done, p1-1, 2024-01-01, 7d
@@ -6228,7 +6595,7 @@ gantt
 
 ## Conclusion
 
-This implementation plan provides a comprehensive roadmap for building a production-ready DyTopo framework. The phased approach ensures manageable development cycles while maintaining focus on quality and performance. With the outlined resources and timeline, the team can successfully deliver a robust implementation that advances the state of multi-agent reasoning systems.
+This implementation plan provides a comprehensive roadmap for building a production-ready Noematics framework. The phased approach ensures manageable development cycles while maintaining focus on quality and performance. With the outlined resources and timeline, the team can successfully deliver a robust implementation that advances the state of multi-agent reasoning systems.
 
 The plan emphasizes:
 - **Modular Architecture**: enabling future extensions and maintenance
@@ -6237,4 +6604,4 @@ The plan emphasizes:
 - **Documentation**: facilitating adoption and knowledge transfer
 - **Risk Mitigation**: proactive handling of technical and project risks
 
-Following this plan will result in a well-tested, performant, and maintainable DyTopo implementation that can serve as a foundation for advanced multi-agent reasoning applications.
+Following this plan will result in a well-tested, performant, and maintainable Noematics implementation that can serve as a foundation for advanced multi-agent reasoning applications.

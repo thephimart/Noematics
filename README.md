@@ -40,7 +40,11 @@ result = await framework.solve(
 )
 ```
 
-## License
+## Documentation
+
+- [Implementation Plan](implementation_plan.md) — Full technical specification with invariants, interpretation spec, and MIC
+- [AGENTS.md](AGENTS.md) — Developer guidelines
+- [LICENSE](LICENSE) — MIT License
 
 **MIT License — use it, fork it, break it, improve it.**
 

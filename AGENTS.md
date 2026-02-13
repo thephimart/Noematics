@@ -26,7 +26,7 @@ pre-commit install     # Install pre-commit hooks
 pytest                             # Run all tests
 pytest tests/unit/test_agent_system.py              # Single test file
 pytest tests/unit/test_agent_system.py::TestAgentBase::test_agent_initialization  # Single test
-pytest --cov=src/dytopo --cov-report=html       # With coverage
+pytest --cov=src/noematics --cov-report=html       # With coverage
 pytest -k "test_semantic"                       # Pattern matching
 pytest -v                                       # Verbose mode
 pytest -s                                       # Disable stdin capture
@@ -47,7 +47,7 @@ pre-commit run --all-files                    # Run all linters
 ## Code Style Guidelines
 
 ### Imports
-- Use absolute imports: `from dytopo.agents.base import Agent`
+- Use absolute imports: `from noematics.agents.base import Agent`
 - Sort: standard library → third-party → local
 - Never use wildcard imports (`from x import *`)
 
@@ -66,6 +66,15 @@ pre-commit run --all-files                    # Run all linters
 - **Functions/methods**: `snake_case` (e.g., `build_communication_graph`)
 - **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_ROUNDS`)
 - **Private attributes**: `_leading_underscore` (e.g., `_internal_state`)
+
+### Noematic Terminology
+| Term | Usage |
+|------|-------|
+| **noema** | Semantic unit with query/key vectors — the fundamental atomic entity |
+| **node** | Network/graph vertex (use only in graph/network contexts) |
+| **agent** | Entity with perspective/agency — MUST have a role and execute tasks |
+| **field** | Collection of noemata with shared topology — NOT "cluster" or "group" |
+| **link** | Directed edge between noemata — NOT "edge", "connection", "wire" |
 
 ### Error Handling
 - Use custom exceptions for domain-specific errors
@@ -95,7 +104,7 @@ pre-commit run --all-files                    # Run all linters
 
 ## Project Structure
 ```
-src/dytopo/
+src/noematics/
 ├── core/          # Framework and types
 ├── agents/        # Agent implementations
 ├── llm/           # LLM backend integrations
@@ -117,8 +126,8 @@ src/dytopo/
 
 ### Creating an Agent
 ```python
-from dytopo.agents.factory import AgentFactory
-from dytopo.llm.openai import OpenAIBackend
+from noematics.agents.factory import AgentFactory
+from noematics.llm.openai import OpenAIBackend
 
 backend = OpenAIBackend(api_key=os.getenv("OPENAI_API_KEY"))
 agent = AgentFactory.create_agent(role="developer", agent_id="dev_1", llm_backend=backend)
@@ -127,10 +136,10 @@ agent = AgentFactory.create_agent(role="developer", agent_id="dev_1", llm_backen
 ### Running a Task
 ```python
 import asyncio
-from dytopo.core.framework import DyTopoFramework
+from noematics.core.framework import NoematicsFramework
 
 async def main():
-    framework = DyTopoFramework(config)
+    framework = NoematicsFramework(config)
     result = await framework.solve(task="Your task", agent_roles=["developer", "tester"], max_rounds=5)
     print(result.final_answer)
 
