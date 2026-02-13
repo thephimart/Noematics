@@ -150,7 +150,7 @@ And observe:
 
 ---
 
-## Phase 3 — Only Then: DyTopo Instantiation
+## Phase 3 — Only Then: Noematics Instantiation
 
 Only after MIC is stable:
 
