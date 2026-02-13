@@ -4,6 +4,8 @@
 
 A Python implementation of the DyTopo framework for multi-agent reasoning with dynamic communication topologies.
 
+## Coming Soon
+
 ## Overview
 
 Noematics implements the DyTopo algorithm from the paper:
@@ -20,8 +22,6 @@ The framework enables multi-agent systems to dynamically rewire their communicat
 - Manager-guided workflow orchestration
 - Support for multiple LLM backends (OpenAI-compatible APIs)
 - Interpretable coordination traces through evolving graphs
-
-COMING SOON
 
 ## License
 
