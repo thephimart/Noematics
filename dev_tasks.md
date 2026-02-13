@@ -61,3 +61,38 @@ Tasks here assume familiarity with the core constraints.
    - Verify message delivery, round execution
 
 **Deliverable**: `src/noematics/core/interfaces.py`, `src/noematics/core/mic.py`, tests
+
+## Tasks A & B Complete
+
+---
+
+## Task C — Post-MIC Direction (Decision Recorded)
+
+**Status**: MIC implemented, tests passing, documentation hardened.
+
+The architecture now supports the following *explicit* next steps.
+No other development is considered in-scope without revisiting this decision.
+
+### Valid Directions
+
+1. **Freeze & Validate**
+   - Write adversarial tests
+   - Attempt to violate invariants
+   - Stress MIC under edge conditions
+
+2. **Extend Interpretation**
+   - Add richer delta structures
+   - Introduce multiple interpretation strategies
+   - Preserve interpretation purity (no topology mutation)
+
+3. **Add a Second Topology Strategy**
+   - Non-DyTopo routing/topology
+   - Demonstrate framework generality
+   - Require zero changes to MIC
+
+4. **Stop (Selected)**
+   - MIC, DyTopo adapter, and documentation are stable
+   - No further development until a new motivating question emerges
+   - Revisit only with a concrete, scoped objective
+
+**Current status**: paused by design.
