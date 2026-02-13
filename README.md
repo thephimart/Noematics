@@ -4,6 +4,8 @@
 
 A Python implementation of the DyTopo framework for multi-agent reasoning with dynamic communication topologies.
 
+## Coming Soon
+
 ## Overview
 
 Noematics implements the DyTopo algorithm from the paper:
@@ -45,6 +47,8 @@ result = await framework.solve(
 - [Implementation Plan](implementation_plan.md) — Full technical specification with invariants, interpretation spec, and MIC
 - [AGENTS.md](AGENTS.md) — Developer guidelines
 - [LICENSE](LICENSE) — MIT License
+
+## License
 
 **MIT License — use it, fork it, break it, improve it.**
 
