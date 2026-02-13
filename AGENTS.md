@@ -147,12 +147,13 @@ These files are **stable contracts**. Do not modify unless absolutely necessary:
 | `src/noematics/core/mic.py` | Reference MIC — locked to preserve invariant honesty |
 | `implementation_plan.md` | Normative spec — almost never changes |
 | `FIRST_STEPS.md` | Commit-order plan — frozen and ruthless |
+| `README.md` | Project overview and motivation |
 | `docs/invariants.md` | Formal system invariants — structural, temporal, interpretation |
 | `docs/interpretation.md` | Mechanical interpretation specification |
 
 ### Additional Resources
 
-- **README.md** — Project overview and motivation
+- **AGENTS.md** — Agent coding guidelines
 
 ---
 
