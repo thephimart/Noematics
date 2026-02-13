@@ -137,6 +137,17 @@ If something later feels like it needs a change here, that's a signal the runtim
 - **docs/invariants.md** — Required invariants all implementations must preserve.
 - **docs/interpretation.md** — How interpretation works mechanically.
 
+### Locked Files
+
+These files are **stable contracts**. Do not modify unless absolutely necessary:
+
+| File | Reason |
+|------|--------|
+| `src/noematics/core/interfaces.py` | Stable contract — all implementations must conform |
+| `src/noematics/core/mic.py` | Reference MIC — locked to preserve invariant honesty |
+| `implementation_plan.md` | Normative spec — almost never changes |
+| `FIRST_STEPS.md` | Commit-order plan — frozen and ruthless |
+
 ### Additional Resources
 
 - **README.md** — Project overview and motivation
