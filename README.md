@@ -149,6 +149,9 @@ Noematics is about **semantic structure under change**, nothing more.
 
 ## Documentation
 
+- **First Steps** — Guided initial execution path — commit-order plan with phases  
+  [`FIRST_STEPS.md`](FIRST_STEPS.md)
+
 - **Implementation Plan** — Full technical specification, invariants, and MIC  
   [`implementation_plan.md`](implementation_plan.md)
 
