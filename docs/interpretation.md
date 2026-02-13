@@ -17,6 +17,7 @@ interpret(noema, round_context) → InterpretationDelta
 | Property | Specification |
 |----------|---------------|
 | **Purity** | Pure function: `f(noema, ctx) → delta` with no side effects |
+| **Note** | All inputs to interpretation MUST be explicitly represented in `InterpretationInput`. No hidden or implicit state may influence interpretation. |
 | **Output** | Returns a **delta**, not full state — enables compositional reasoning |
 | **Idempotence** | `interpret(x) ∘ interpret(x) = interpret(x)` |
 | **Commutativity** | `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)` |
@@ -102,7 +103,9 @@ function interpret(input: InterpretationInput) → InterpretationResult:
 
 ---
 
-## Conflict Resolution
+## Conflict Resolution (Post-Interpretation)
+
+Conflict resolution operates on the results of interpretation and is not itself part of the interpretation function.
 
 When multiple interpretations produce conflicting field memberships:
 
@@ -123,9 +126,28 @@ resolve_conflict(deltas: List[InterpretationDelta]) → InterpretationDelta:
 
 ---
 
+## Commutativity Verification
+
+Commutativity is verified by applying interpretation deltas in all possible orders
+within a round and asserting identical resulting noema state.
+
+---
+
 ## Key Questions Answered
 
 - **Is interpretation pure?** Yes — same inputs always produce same outputs
 - **Are deltas allowed?** Yes — deltas enable compositional reasoning
-- **Can interpretations commute?** Yes — deltas must be order-independent
+- **Can interpretations commute?** Yes — deltas produced within the same field and round MUST be order-independent
 - **How are conflicts surfaced?** Via field_membership conflicts resolved by round number priority
+
+---
+
+## What Interpretation Is Not
+
+Interpretation does NOT:
+- mutate topology directly
+- access global state
+- perform optimization or learning
+- make irreversible commitments
+
+Any implementation that does so is non-conformant.
