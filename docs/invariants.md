@@ -98,5 +98,5 @@ Multiple interpretations on the same round MUST commute.
 | **noema** | Semantic unit with query/key vectors — the fundamental atomic entity |
 | **node** | Network/graph vertex (use only in graph/network contexts) |
 | **agent** | Entity with perspective/agency — MUST have a role and execute tasks |
-| ** of noematafield** | Collection with shared topology — NOT "cluster" or "group" |
+| **field** | Collection of noemata with shared topology — NOT "cluster" or "group" |
 | **link** | Directed edge between noemata — NOT "edge", "connection", "wire" |

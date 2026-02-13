@@ -8,7 +8,7 @@ def test_mic_runs_end_to_end():
         Noema(id="C", query_vector="complete", key_vector="end"),
     ]
 
-    routing = RoutingTable(edges=[("A", "B"), ("B", "C")])
+    routing = RoutingTable(links=[("A", "B"), ("B", "C")])
 
     runtime = MICRuntime(noemata, routing)
     result = runtime.run(goal="Process data", max_rounds=3)
@@ -25,7 +25,7 @@ def test_mic_message_delivery():
         Noema(id="Y", query_vector="c", key_vector="d"),
     ]
 
-    routing = RoutingTable(edges=[("X", "Y")])
+    routing = RoutingTable(links=[("X", "Y")])
 
     runtime = MICRuntime(noemata, routing)
     result = runtime.run(goal="Test", max_rounds=1)
@@ -39,7 +39,7 @@ def test_mic_deterministic():
         Noema(id="A", query_vector="q", key_vector="k"),
     ]
 
-    routing = RoutingTable(edges=[])
+    routing = RoutingTable(links=[])
 
     runtime = MICRuntime(noemata, routing)
     result1 = runtime.run(goal="Test", max_rounds=2)

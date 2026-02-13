@@ -10,10 +10,10 @@ from noematics.core.interfaces import (
 
 @dataclass
 class RoutingTable:
-    edges: List[tuple[str, str]]
+    links: List[tuple[str, str]]
 
     def get_targets(self, source_id: str) -> List[str]:
-        return [target for src, target in self.edges if src == source_id]
+        return [target for src, target in self.links if src == source_id]
 
 
 class NoemaAgent:
