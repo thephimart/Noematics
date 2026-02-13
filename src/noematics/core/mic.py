@@ -4,6 +4,7 @@ from noematics.core.interfaces import (
     Noema,
     Message,
     RoundContext,
+    RoutingProtocol,
     InterpretationInput,
     InterpretationDelta,
     InterpretationResult,
@@ -17,8 +18,7 @@ class SimpleInterpreter:
         delta = InterpretationDelta(
             noema_id=inp.noema.id,
             state_updates={
-                "received": msg_contents,
-                "round": inp.round_context.round_number,
+                f"received_r{inp.round_context.round_number}": msg_contents,
             },
         )
         routing_messages = []
@@ -26,14 +26,14 @@ class SimpleInterpreter:
             for msg in inp.received_messages:
                 routing_messages.append(Message(
                     sender_id=inp.noema.id,
-                    receiver_id=msg.sender_id,
+                    receiver_id="",  # Runtime assigns receivers exclusively
                     content=f"Ack: {msg.content}",
                     round_number=inp.round_context.round_number,
                 ))
         else:
             routing_messages.append(Message(
                 sender_id=inp.noema.id,
-                receiver_id="broadcast",
+                receiver_id="",  # Runtime assigns receivers exclusively
                 content=f"[{inp.noema.id}] {inp.round_context.goal}",
                 round_number=inp.round_context.round_number,
             ))
@@ -44,7 +44,7 @@ class SimpleInterpreter:
 
 
 @dataclass
-class RoutingTable:
+class RoutingTable(RoutingProtocol):
     links: List[tuple[str, str]]
 
     def get_targets(
@@ -85,12 +85,17 @@ class MICRuntime:
                     field_id="default",
                     received_messages=received,
                     round_context=context,
-                    agent_id=noema.id,
+                    agent_id=noema.id,  # MIC shortcut: noema identity used as perspective anchor
                 )
                 result = self.interpreter.interpret(inp)
 
                 for delta in result.deltas:
                     if delta.noema_id in self.states:
+                        for key in delta.state_updates:
+                            if key in self.states[delta.noema_id]:
+                                raise RuntimeError(
+                                    f"Non-commutative update on {delta.noema_id}.{key}"
+                                )
                         self.states[delta.noema_id].update(delta.state_updates)
 
                 for msg in result.messages_to_route:
