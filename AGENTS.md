@@ -44,6 +44,21 @@ pre-commit run --all-files                    # Run all linters
 
 ---
 
+## Interface Stability (CRITICAL)
+
+### DO NOT MODIFY `src/noematics/core/interfaces.py`
+
+This file is a **stable contract**, not a working surface.
+
+- Do NOT add methods
+- Do NOT add convenience fields
+- Do NOT "improve ergonomics"
+- Do NOT let future-you touch it casually
+
+If something later feels like it needs a change here, that's a signal the runtime or interpretation implementation is wrong — not the interfaces.
+
+---
+
 ## Code Style Guidelines
 
 ### Imports
