@@ -4,43 +4,71 @@ from noematics.core.interfaces import (
     Noema,
     Message,
     RoundContext,
+    InterpretationInput,
+    InterpretationDelta,
+    InterpretationResult,
     ExecutionResult,
 )
+
+
+class SimpleInterpreter:
+    def interpret(self, inp: InterpretationInput) -> InterpretationResult:
+        msg_contents = [m.content for m in inp.received_messages]
+        delta = InterpretationDelta(
+            noema_id=inp.noema.id,
+            state_updates={
+                "received": msg_contents,
+                "round": inp.round_context.round_number,
+            },
+        )
+        routing_messages = []
+        if inp.received_messages:
+            for msg in inp.received_messages:
+                routing_messages.append(Message(
+                    sender_id=inp.noema.id,
+                    receiver_id=msg.sender_id,
+                    content=f"Ack: {msg.content}",
+                    round_number=inp.round_context.round_number,
+                ))
+        else:
+            routing_messages.append(Message(
+                sender_id=inp.noema.id,
+                receiver_id="broadcast",
+                content=f"[{inp.noema.id}] {inp.round_context.goal}",
+                round_number=inp.round_context.round_number,
+            ))
+        return InterpretationResult(
+            deltas=[delta],
+            messages_to_route=routing_messages,
+        )
 
 
 @dataclass
 class RoutingTable:
     links: List[tuple[str, str]]
 
-    def get_targets(self, source_id: str) -> List[str]:
+    def get_targets(
+        self,
+        source_id: str,
+        field_id: str,
+        round_context: RoundContext,
+    ) -> List[str]:
         return [target for src, target in self.links if src == source_id]
 
 
-class NoemaAgent:
-    def __init__(self, noema: Noema):
-        self.noema = noema
-
-    def produce_message(self, context: RoundContext) -> Message:
-        content = f"[{self.noema.id}] Processing: {context.goal}"
-        return Message(
-            sender_id=self.noema.id,
-            receiver_id="",
-            content=content,
-            round_number=context.round_number,
-        )
-
-    def interpret(self, received: List[Message], context: RoundContext) -> None:
-        for msg in received:
-            self.noema.private_state[msg.sender_id] = msg.content
-
-
 class MICRuntime:
-    def __init__(self, noemata: List[Noema], routing: RoutingTable):
+    def __init__(
+        self,
+        noemata: List[Noema],
+        routing: RoutingTable,
+        interpreter: SimpleInterpreter,
+    ):
         self.noemata = {n.id: n for n in noemata}
-        self.agents = {n.id: NoemaAgent(n) for n in noemata}
         self.routing = routing
+        self.interpreter = interpreter
         self.messages: List[Message] = []
         self.round_number = 0
+        self.states: Dict[str, Dict[str, Any]] = {n.id: {} for n in noemata}
 
     def run(self, goal: str, max_rounds: int = 5) -> ExecutionResult:
         for round_num in range(1, max_rounds + 1):
@@ -50,30 +78,38 @@ class MICRuntime:
             )
 
             round_messages = []
-            for agent in self.agents.values():
-                msg = agent.produce_message(context)
-                for target_id in self.routing.get_targets(agent.noema.id):
-                    routed_msg = Message(
-                        sender_id=msg.sender_id,
-                        receiver_id=target_id,
-                        content=msg.content,
-                        round_number=round_num,
+            for noema in self.noemata.values():
+                received = [m for m in self.messages if m.receiver_id == noema.id]
+                inp = InterpretationInput(
+                    noema=noema,
+                    field_id="default",
+                    received_messages=received,
+                    round_context=context,
+                    agent_id=noema.id,
+                )
+                result = self.interpreter.interpret(inp)
+
+                for delta in result.deltas:
+                    if delta.noema_id in self.states:
+                        self.states[delta.noema_id].update(delta.state_updates)
+
+                for msg in result.messages_to_route:
+                    targets = self.routing.get_targets(
+                        noema.id, "default", context
                     )
-                    round_messages.append(routed_msg)
-
-            received_by_agent: Dict[str, List[Message]] = {
-                nid: [] for nid in self.noemata
-            }
-            for msg in round_messages:
-                received_by_agent[msg.receiver_id].append(msg)
-
-            for agent in self.agents.values():
-                agent.interpret(received_by_agent[agent.noema.id], context)
+                    for target_id in targets:
+                        routed_msg = Message(
+                            sender_id=msg.sender_id,
+                            receiver_id=target_id,
+                            content=msg.content,
+                            round_number=round_num,
+                        )
+                        round_messages.append(routed_msg)
 
             self.messages.extend(round_messages)
 
         return ExecutionResult(
             rounds_completed=max_rounds,
             total_messages=len(self.messages),
-            final_states={nid: a.noema.private_state for nid, a in self.agents.items()},
+            final_states=self.states,
         )

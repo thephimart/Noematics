@@ -3,14 +3,18 @@ from noematics.core.interfaces import (
     Field,
     Message,
     RoundContext,
+    InterpretationInput,
+    InterpretationDelta,
+    InterpretationResult,
+    InterpretationProtocol,
     RoutingProtocol,
     AgentProtocol,
     ExecutionResult,
     RuntimeProtocol,
 )
 from noematics.core.mic import (
+    SimpleInterpreter,
     RoutingTable,
-    NoemaAgent,
     MICRuntime,
 )
 
@@ -19,11 +23,15 @@ __all__ = [
     "Field",
     "Message",
     "RoundContext",
+    "InterpretationInput",
+    "InterpretationDelta",
+    "InterpretationResult",
+    "InterpretationProtocol",
     "RoutingProtocol",
     "AgentProtocol",
     "ExecutionResult",
     "RuntimeProtocol",
+    "SimpleInterpreter",
     "RoutingTable",
-    "NoemaAgent",
     "MICRuntime",
 ]
