@@ -42,7 +42,7 @@ All structural links within a field MUST stay within that field's boundary.
 
 Temporal updates MUST be monotonic in causal order.
 
-- **Formal**: `∀t1 < t2: state(t1) ⊆ state(t2)` (monotonic growth)
+- **Formal**: `∀t1 < t2: state(t1) ⊆ state(t2) ∨ retraction(t2)` (monotonic growth, except for explicit retractions)
 - **Exception**: Only explicit "retraction" operations may remove state
 - **Violation**: Race conditions and inconsistent reads
 - **Check at**: every state update
