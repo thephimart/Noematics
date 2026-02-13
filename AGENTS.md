@@ -102,6 +102,21 @@ pre-commit run --all-files                    # Run all linters
 
 ---
 
+## Project Documentation
+
+### Documentation Hierarchy
+
+| File | Role | Properties |
+|------|------|------------|
+| **FIRST_STEPS.md** | Execution on-ramp — "What do I do right now, in what order?" | Linear, opinionated, prescriptive, short, cannot branch |
+| **dev_tasks.md** | Maintainer control surface — "What work exists, what's blocked?" | Non-linear, can grow, can reference future phases, scope pressure management |
+| **implementation_plan.md** | Normative spec — "What does it mean for implementation to be correct?" | Almost never changes casually |
+
+- **FIRST_STEPS.md** — Keep frozen and ruthless. This is the strict commit-order plan. Do not skip steps.
+- **dev_tasks.md** — Let breathe and evolve. Broad context for future work.
+
+---
+
 ## Project Structure
 ```
 src/noematics/
