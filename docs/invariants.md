@@ -84,9 +84,9 @@ Interpretation MUST NOT mutate topology directly.
 
 ### 8. Delta Composition
 
-Multiple interpretations on the same round MUST commute.
+Multiple interpretations within the same field and round MUST commute.
 
-- **Formal**: `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)`
+- **Formal**: `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)` (within field/round scope)
 - **Violation**: Order-dependent results
 - **Check at**: parallel interpretation scenarios
 
