@@ -21,24 +21,7 @@ The framework enables multi-agent systems to dynamically rewire their communicat
 - Support for multiple LLM backends (OpenAI-compatible APIs)
 - Interpretable coordination traces through evolving graphs
 
-## Installation
-
-```bash
-poetry install
-```
-
-## Quick Start
-
-```python
-from noematics import NoematicsFramework
-
-framework = NoematicsFramework(config)
-result = await framework.solve(
-    task="Your task",
-    agent_roles=["developer", "tester", "designer"],
-    max_rounds=10
-)
-```
+COMING SOON
 
 ## License
 
