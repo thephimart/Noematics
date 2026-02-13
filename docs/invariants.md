@@ -66,6 +66,7 @@ A round's interpretation MUST complete before the next round begins.
 Interpretation is a pure function — same input descriptors MUST produce same output deltas.
 
 - **Formal**: `∀inputs: interpret(inputs) = f(inputs)` where `f` has no side effects
+- **Note**: Inputs include noema state, field state, agent perspective, and round context.
 - **Violation**: Non-deterministic system behavior
 - **Check at**: implementation review, property-based testing
 
