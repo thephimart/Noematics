@@ -55,7 +55,6 @@ class DyTopoRuntime:
         self.interpreter = interpreter
         self.config = config
         self.topology = DynamicTopology(config.topology_config)
-        self._routing_history: List[RoutingTable] = []
         self._views: Dict[str, NoemaView] = {
             n.id: NoemaView.from_noema(n) for n in noemata
         }
@@ -102,7 +101,7 @@ class DyTopoRuntime:
                     goal=goal,
                     round_num=round_num,
                 )
-                self._routing_history.append(current_routing)
+                # Topology history is now the single source of truth
 
         return ExecutionResult(
             rounds_completed=completed,
@@ -139,7 +138,13 @@ class DyTopoRuntime:
         return self.topology.build_routing_from_arrays(queries, keys, goal, context)
 
     def get_routing_history(self) -> List[RoutingTable]:
-        return self._routing_history
+        """Derive RoutingTable history from topology history (single source of truth)."""
+        history = self.topology.get_edge_history()
+        return [
+            RoutingTable(links=[(src, tgt) for src, tgt, _ in round_edges])
+            for round_edges in history
+        ]
 
     def get_topology_history(self) -> List:
+        """Single source of truth for topology evolution."""
         return self.topology.get_edge_history()
