@@ -18,11 +18,11 @@ A noema MUST belong to exactly one field at any instant.
 
 ### 2. Graph Connectivity
 
-Structural links MUST form a connected subgraph within a field.
+Structural links MUST form a connected subgraph within a field at all stable execution points.
 
 - **Formal**: `∀f ∈ Fields: subgraph(f.links) is connected`
 - **Violation**: Isolated components cannot receive routed messages
-- **Check at**: topology construction, after link modifications
+- **Check at**: topology construction completion, after link modifications
 
 ---
 
