@@ -19,6 +19,14 @@ class DyTopoConfig:
 
 
 class DyTopoRuntime:
+    """Orchestrates MICRuntime executions with dynamic topology updates.
+
+    DyTopo-specific structural adaptation:
+    - Noema query vectors are updated between rounds based on interpretation state.
+    - MICRuntime is intentionally re-instantiated each DyTopo round.
+      MIC is treated as a single-step semantic evaluator, not a long-lived process.
+    """
+
     def __init__(
         self,
         noemata: List[Noema],
@@ -34,14 +42,18 @@ class DyTopoRuntime:
     def run(self, goal: str, max_rounds: int = 5) -> ExecutionResult:
         current_routing = self._build_initial_routing(goal, round_num=0)
         result: Optional[ExecutionResult] = None
+        completed = 0
 
         for round_num in range(1, max_rounds + 1):
+            # NOTE: MICRuntime is intentionally re-instantiated each DyTopo round.
+            # MIC is treated as a single-step semantic evaluator, not a long-lived process.
             runtime = MICRuntime(
                 noemata=self.noemata,
                 routing=current_routing,
                 interpreter=self.interpreter,
             )
             result = runtime.run(goal=goal, max_rounds=1)
+            completed += 1
 
             if round_num < max_rounds and self.config.recompute_every_round:
                 current_routing = self._recompute_routing(
@@ -52,7 +64,7 @@ class DyTopoRuntime:
                 self._routing_history.append(current_routing)
 
         return ExecutionResult(
-            rounds_completed=max_rounds,
+            rounds_completed=completed,
             total_messages=result.total_messages if result else 0,
             final_states=result.final_states if result else {},
         )
@@ -71,6 +83,8 @@ class DyTopoRuntime:
         round_num: int,
         states: Dict[str, Dict[str, Any]],
     ) -> RoutingTable:
+        # DyTopo-specific structural adaptation:
+        # Noema query vectors are updated between rounds based on interpretation state.
         updated_noemata = []
         for noema in self.noemata:
             state = states.get(noema.id, {})
