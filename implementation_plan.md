@@ -2,391 +2,102 @@
 
 ## Executive Summary
 
-This document provides a comprehensive implementation plan for Noematics — a framework for modeling how noēmata evolve over dynamic topologies. Based on the Noematics paper (arXiv:2602.06039), this implementation enables dynamic semantic routing between multiple LLM agents for improved multi-round reasoning tasks.
+This document provides a comprehensive implementation plan for Noematics — a framework for modeling how noēmata evolve over dynamic topologies. This document specifies the normative constraints, component boundaries, and implementation obligations required for a conforming Noematics system. Reference instantiations (including DyTopo-style semantic routing) are documented separately and are not part of the core specification.
 
 ---
-## Externel Documentation
 
-Operational semantics are defined in docs/mic.md
+---
 
-Reference instantiations are documented under docs/reference/
+## Scope of This Document (IMPORTANT)
+
+Except where explicitly marked as *normative* and delegated to other documents,
+the remaining sections of this implementation plan are:
+
+- descriptive, not prescriptive
+- non-normative
+- subject to revision
+- intended to guide contributors, not constrain implementations
+
+Authoritative system semantics are defined exclusively in:
+- `docs/invariants.md`
+- `docs/interpretation.md`
+- `docs/mic.md`
+
+Any conflict must be resolved in favor of those documents.
+
+---
 
 ## Noematic Invariants
 
-These properties **MUST** hold in all valid system states. They transform philosophical principles into engineering constraints.
+This section is **normatively specified** in:
 
-### Structural Invariants
-
-1. **Field Membership**: A noema MUST belong to exactly one field at any instant
-   - Formal: `∀noema ∈ Noemata: |{f ∈ Fields : noema ∈ f}| = 1`
-   - Violation: Creates ambiguous authority and conflicting interpretations
-
-2. **Graph Connectivity**: Structural links MUST form a connected subgraph within a field
-   - Formal: `∀f ∈ Fields: subgraph(f.links) is connected`
-   - Violation: Isolated components cannot receive routed messages
-
-3. **Field Scope**: All structural links within a field MUST stay within that field's boundary
-   - Formal: `∀link ∈ f.links: link.source ∈ f ∧ link.target ∈ f`
-   - Violation: Cross-field links break isolation guarantees
-
-### Temporal Invariants
-
-4. **Causal Ordering**: Temporal updates MUST be monotonic in causal order
-   - Formal: `∀t1 < t2: state(t1) ⊆ state(t2)` (monotonic growth)
-   - Exception: Only explicit "retraction" operations may remove state
-   - Violation: Race conditions and inconsistent reads
-
-5. **Round Atomicity**: A round's interpretation MUST complete before the next round begins
-   - Formal: `∀round r: interpret(r) happens-before interpret(r+1)`
-   - Violation: Message ordering ambiguity
-
-### Interpretation Invariants
-
-6. **Interpretation Purity**: Interpretation is a pure function — same input descriptors MUST produce same output deltas
-   - Formal: `∀inputs: interpret(inputs) = f(inputs)` where `f` has no side effects
-   - Violation: Non-deterministic system behavior
-
-7. **Topology Read-Only Interpretation**: Interpretation MUST NOT mutate topology directly
-   - Formal: `∀noema: interpret(noema).topology_delta = ∅`
-   - Violation: Breaks separation of concerns; routing logic polluted
-
-8. **Delta Composition**: Multiple interpretations on the same round MUST commute
-   - Formal: `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)`
-   - Violation: Order-dependent results
-
-### Naming Conventions (Enforced)
-
-| Term | Usage |
-|------|-------|
-| **noema** | Semantic unit with query/key vectors — the fundamental atomic entity |
-| **node** | Network/graph vertex (use only in graph/network contexts) |
-| **agent** | Entity with perspective/agency — MUST have a role and execute tasks |
-| **field** | Collection of noemata with shared topology — NOT "cluster" or "group" |
-| **link** | Directed edge between noemata — NOT "edge", "connection", "wire" |
+> `docs/invariants.md`.
 
 ---
 
 ## Interpretation: Mechanical Specification
 
-Interpretation is the core operation of Noematics. Below is the algorithmic specification:
+This section is **normatively specified** in:
 
-### Definition
-
-```
-interpret(noema, round_context) → InterpretationDelta
-```
-
-### Properties
-
-| Property | Specification |
-|----------|---------------|
-| **Purity** | Pure function: `f(noema, ctx) → delta` with no side effects |
-| **Output** | Returns a **delta**, not full state — enables compositional reasoning |
-| **Idempotence** | `interpret(x) ∘ interpret(x) = interpret(x)` |
-| **Commutativity** | `interpret(a) ∘ interpret(b) = interpret(b) ∘ interpret(a)` |
-
-### Data Structures
-
-```python
-@dataclass
-class InterpretationDelta:
-    """Delta produced by interpretation — never full state"""
-    query_delta: str          # What information is now needed (append-only)
-    key_delta: str            # What information is now offered (append-only)
-    field_membership: Optional[str] = None  # None = no change
-    metadata_delta: Dict[str, Any] = field(default_factory=dict)
-
-@dataclass
-class InterpretationInput:
-    """Complete input to interpretation function"""
-    noema: "Noema"
-    round_context: "RoundContext"
-    received_messages: List["AgentMessage"]
-    
-@dataclass  
-class InterpretationResult:
-    """Complete output of interpretation"""
-    delta: InterpretationDelta
-    local_state_update: Dict[str, Any]
-    messages_to_route: List["RoutingDecision"]
-```
-
-### Pseudocode Algorithm
-
-```
-function interpret(input: InterpretationInput) → InterpretationResult:
-    
-    # Step 1: Analyze received messages
-    relevant_info = extract_relevant_content(input.received_messages)
-    
-    # Step 2: Update local understanding (pure state transformation)
-    current_q = input.noema.query_vector
-    current_k = input.noema.key_vector
-    
-    new_q = refine_query(current_q, relevant_info, input.round_context.goal)
-    new_k = refine_key(current_k, relevant_info, input.round_context.goal)
-    
-    # Step 3: Determine information needs
-    information_gap = compute_information_gap(
-        new_q, 
-        input.round_context.goal,
-        input.received_messages
-    )
-    
-    # Step 4: Determine field membership (may be None = no change)
-    target_field = determine_field_membership(
-        new_k,
-        input.round_context.available_fields
-    )
-    
-    # Step 5: Build routing decisions
-    routing = determine_routing_targets(
-        information_gap,
-        input.round_context.neighbor_noemata
-    )
-    
-    # Step 6: Compose delta
-    delta = InterpretationDelta(
-        query_delta=diff(current_q, new_q),      # What changed in query
-        key_delta=diff(current_k, new_k),        # What changed in key
-        field_membership=target_field,           # May be None
-        metadata_delta={"round": input.round_context.round_number}
-    )
-    
-    return InterpretationResult(
-        delta=delta,
-        local_state_update={"query": new_q, "key": new_k},
-        messages_to_route=routing
-    )
-```
-
-### Conflict Resolution
-
-When multiple interpretations produce conflicting field memberships:
-
-```
-resolve_conflict(deltas: List[InterpretationDelta]) → InterpretationDelta:
-    
-    # Priority: explicit field_membership > None
-    non_null = [d for d in deltas if d.field_membership is not None]
-    
-    if len(non_null) == 0:
-        return merge_deltas(deltas)  # All None = no conflict
-    elif len(non_null) == 1:
-        return non_null[0]
-    else:
-        # Multiple explicit memberships — use highest round number
-        return max(non_null, key=lambda d: d.metadata_delta.get("round", 0))
-```
-
----
+> `docs/interpretation.md`.
 
 ## Minimal Implementable Core (MIC)
 
-For contributors, a first success milestone is critical. This defines the smallest set of components that can run end-to-end without agents, learning, or visualization.
+The Minimal Implementable Core (MIC) defines the smallest executable substrate of Noematics that preserves
+explicit semantics, invariant enforcement, and deterministic execution.
 
-### MIC Scope
+The MIC exists to ensure that Noematics is:
+- runnable end-to-end without learning, LLMs, or semantic heuristics,
+- testable under strict determinism,
+- and extensible without semantic ambiguity.
 
-| Component | Included? | Rationale |
-|-----------|-----------|-----------|
-| Noema data structure | ✅ Yes | Core entity |
-| Static field | ✅ Yes | Simplest topology |
-| Static routing (no semantic matching) | ✅ Yes | No embeddings needed |
-| Round execution loop | ✅ Yes | Core orchestration |
-| Message passing | ✅ Yes | Communication primitive |
-| Agent abstraction | ❌ No | Deferred to Phase 2 |
-| Semantic encoder | ❌ No | Deferred to Phase 1 |
-| Manager/goal setting | ❌ No | Deferred to Phase 2 |
-| Visualization | ❌ No | Deferred to Phase 5 |
-| Learning/adaptation | ❌ No | Deferred to Phase 6 |
+### Normative Specification
 
-### MIC Architecture
+The operational semantics, execution order, failure behavior, and determinism guarantees of the MIC are
+**normatively specified** in:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Minimal Noematics                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌─────────┐    ┌─────────┐    ┌─────────┐               │
-│   │ Noema A │───▶│ Noema B │───▶│ Noema C │               │
-│   └─────────┘    └─────────┘    └─────────┘               │
-│        │              │              │                     │
-│        ▼              ▼              ▼                     │
-│   ┌─────────────────────────────────────────┐             │
-│   │           Static Routing Table           │             │
-│   │     (predefined edges, no matching)      │             │
-│   └─────────────────────────────────────────┘             │
-│                      │                                      │
-│                      ▼                                      │
-│   ┌─────────────────────────────────────────┐             │
-│   │           Round Execution Loop           │             │
-│   │  1. Each noema produces message          │             │
-│   │  2. Messages routed along edges          │             │
-│   │  3. Each noema interprets received       │             │
-│   │  4. Check termination condition          │             │
-│   └─────────────────────────────────────────┘             │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+> `docs/mic.md`
 
-### MIC Implementation (Pseudocode)
+This document is authoritative.  
+The MIC section of this implementation plan intentionally does not restate execution semantics.
 
-```python
-# mic_core.py — Under 200 lines
+### Implementation Status
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from enum import Enum
+A non-authoritative reference implementation of the MIC exists at:
 
-class TerminationReason(Enum):
-    MAX_ROUNDS = "max_rounds"
-    CONSENSUS = "consensus"
-    STABLE = "stable"
+> `src/noematics/core/mic.py`
 
-@dataclass
-class Noema:
-    """Minimal noema with query/key vectors"""
-    id: str
-    query_vector: str
-    key_vector: str
-    private_state: Dict = field(default_factory=dict)
+Conformance is determined solely by observable behavior and invariant preservation, not by code structure.
 
-@dataclass
-class Message:
-    """Simple message between noemata"""
-    sender_id: str
-    receiver_id: str
-    content: str
-    round_number: int
+### Success Criteria
 
-@dataclass
-class RoutingTable:
-    """Static routing — predefined edges"""
-    edges: List[tuple[str, str]]  # (source_id, target_id)
+The MIC is considered complete when:
 
-    def get_targets(self, source_id: str) -> List[str]:
-        return [target for src, target in self.edges if src == source_id]
+- All MIC unit tests pass
+- Execution is deterministic under identical initial state and routing
+- Invariant violations halt execution
+- No semantic routing, learning, or topology mutation is required
 
-@dataclass
-class RoundContext:
-    """Round metadata"""
-    round_number: int
-    goal: str
-    messages: List[Message] = field(default_factory=list)
+Once the MIC is complete, all higher-level components MUST layer on top of MIC semantics without violating
+its execution guarantees.
 
-class NoemaAgent:
-    """Minimal agent — just produces a message"""
-    
-    def __init__(self, noema: Noema):
-        self.noema = noema
-    
-    def produce_message(self, context: RoundContext) -> Message:
-        # Simple: just echo goal + current state
-        content = f"[{self.noema.id}] Processing: {context.goal}"
-        return Message(
-            sender_id=self.noema.id,
-            receiver_id="",  # Set by router
-            content=content,
-            round_number=context.round_number
-        )
-    
-    def interpret(self, received: List[Message], context: RoundContext):
-        # Minimal interpretation: just log
-        for msg in received:
-            self.noema.private_state[msg.sender_id] = msg.content
+---
 
-class MICRuntime:
-    """Minimal execution engine"""
-    
-    def __init__(self, noemata: List[Noema], routing: RoutingTable):
-        self.noemata = {n.id: n for n in noemata}
-        self.agents = {n.id: NoemaAgent(n) for n in noemata}
-        self.routing = routing
-        self.messages: List[Message] = []
-        self.round_number = 0
-    
-    def run(self, goal: str, max_rounds: int = 5) -> Dict:
-        for round_num in range(1, max_rounds + 1):
-            self.round_number = round_num
-            context = RoundContext(round_number=round_num, goal=goal)
-            
-            # Phase 1: Each agent produces a message
-            round_messages = []
-            for agent in self.agents.values():
-                msg = agent.produce_message(context)
-                # Route to all targets
-                for target_id in self.routing.get_targets(agent.noema.id):
-                    routed_msg = Message(
-                        sender_id=msg.sender_id,
-                        receiver_id=target_id,
-                        content=msg.content,
-                        round_number=round_num
-                    )
-                    round_messages.append(routed_msg)
-            
-            # Phase 2: Deliver messages
-            received_by_agent: Dict[str, List[Message]] = {nid: [] for nid in self.noemata}
-            for msg in round_messages:
-                received_by_agent[msg.receiver_id].append(msg)
-            
-            # Phase 3: Each agent interprets received messages
-            for agent in self.agents.values():
-                agent.interpret(received_by_agent[agent.noema.id], context)
-            
-            self.messages.extend(round_messages)
-        
-        return {
-            "rounds_completed": max_rounds,
-            "total_messages": len(self.messages),
-            "final_states": {nid: a.noema.private_state for nid, a in self.agents.items()}
-        }
-```
+## Reference Instantiations (Non-Normative)
 
-### MIC Test
+The Noematics framework admits multiple valid instantiations.
 
-```python
-# tests/mic/test_minimal_core.py
+A DyTopo-inspired semantic routing implementation is provided as a
+**non-authoritative reference example** in:
 
-def test_mic_runs_end_to_end():
-    # Setup: 3 noemata in a chain
-    noemata = [
-        Noema(id="A", query_vector="start", key_vector="initial"),
-        Noema(id="B", query_vector="process", key_vector="middle"),
-        Noema(id="C", query_vector="complete", key_vector="end"),
-    ]
-    
-    # Static routing: A → B → C
-    routing = RoutingTable(edges=[("A", "B"), ("B", "C")])
-    
-    # Run
-    runtime = MICRuntime(noemata, routing)
-    result = runtime.run(goal="Process data", max_rounds=3)
-    
-    # Assert
-    assert result["rounds_completed"] == 3
-    assert result["total_messages"] == 6  # 2 edges × 3 rounds
-    assert "B" in result["final_states"]["A"]  # A received from B
-    assert "C" in result["final_states"]["B"]  # B received from C
-    
-    print("MIC test passed!")
-```
+- `docs/reference/dytopo.md`
 
-### Success Criteria for MIC
+This reference demonstrates one possible strategy for:
+- topology-conditioned routing,
+- semantic matching–driven connectivity,
+- observable coordination traces.
 
-- [ ] Unit tests pass
-- [ ] Can run 10 rounds with 10 noemata without error
-- [ ] Message delivery is correct (verified by test)
-- [ ] Execution completes in < 1 second for MIC scale
-
-Once MIC is complete, contributors have a working baseline to extend.
-1. [Project Overview](#project-overview)
-2. [Technical Architecture](#technical-architecture)
-3. [Implementation Phases](#implementation-phases)
-4. [Detailed Specifications](#detailed-specifications)
-5. [Development Environment](#development-environment)
-6. [Testing Strategy](#testing-strategy)
-7. [Risk Assessment](#risk-assessment)
-8. [Resource Requirements](#resource-requirements)
+It does **not** constrain valid Noematics implementations.
 
 ---
 
