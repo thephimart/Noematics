@@ -134,34 +134,134 @@ If something later feels like it needs a change here, that's a signal the runtim
 - **implementation_plan.md** — The authoritative technical specification.
 - **docs/invariants.md** — Required invariants all implementations must preserve.
 - **docs/interpretation.md** — How interpretation works mechanically.
+- **docs/planning/** — Resource planning and operational details (non-normative).
+- **docs/reference/** — Reference implementation sketches (non-normative).
 
 ### Locked Files
 
-These files are **stable contracts**. Do not modify unless absolutely necessary:
+These files are **stable contracts**.
+They may be clarified but should almost never change in meaning.
 
-| File | Reason |
-|------|--------|
-| `src/noematics/core/interfaces.py` | Stable contract — all implementations must conform |
-| `src/noematics/core/mic.py` | Reference MIC — locked to preserve invariant honesty |
-| `implementation_plan.md` | Normative spec — almost never changes |
-| `FIRST_STEPS.md` | Commit-order plan — frozen and ruthless |
-| `README.md` | Project overview and motivation |
-| `docs/invariants.md` | Formal system invariants — structural, temporal, interpretation |
-| `docs/interpretation.md` | Mechanical interpretation specification |
+| File                                    | Reason                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/noematics/core/interfaces.py`      | **Hard contract surface** — downstream code and alternative implementations depend on this |
+| `src/noematics/core/mic.py`             | **Semantic anchor** — reference MIC; invariant honesty depends on stability                |
+| `docs/invariants.md`                    | **Normative** — formal system invariants                                                   |
+| `docs/interpretation.md`                | **Normative** — mechanical semantics                                                       |
+| `docs/mic.md`                           | **Normative** — executable semantics and determinism guarantees                            |
+| `docs/architecture/system_overview.md`  | **Conceptual map** — defines what exists, not how it’s built                               |
+| `docs/architecture/execution_layers.md` | **Layer boundaries** — prevents semantic leakage across layers                             |
+| `implementation_plan.md`                | **Meta-contract** — delegates authority; structure is stable                               |
+| `FIRST_STEPS.md`                        | **Commit-order discipline** — protects project boot sequence                               |
+| `README.md`                             | **External contract** — project identity and intent                                        |
+
+### Contolled (but editable)
+
+Changes require justification, not prohibition.
+
+| File                     | Why                                                  |
+| ------------------------ | ---------------------------------------------------- |
+| `docs/roadmap/phases.md` | Roadmaps *must* evolve; already marked non-normative |
+| `docs/roadmap/risks.md`  | Risk assessment should update as reality changes     |
+
+### Explicitly Not Locked (by design)
+
+> docs/architecture/*.md (except the two above) - Descriptive, extensible
+
+> docs/reference/** - Examples only
+
+> docs/testing/strategy.md - Guidance, not requirements
+
+> docs/rationale/** - Historical record
+
+> dev_tasks.md - Technical debt ledger (must change!)
+
+### Semantically Stable 
+
+These files may be edited for clarity, but not for meaning.
+
+> docs/architecture/data_flow.md
+
+> docs/architecture/extension_points.md
+
+> docs/architecture/data_structures.md
 
 ---
 
 ## Project Structure
 ```
-src/noematics/
-├── core/          # Framework and types
-├── agents/        # Agent implementations
-├── llm/           # LLM backend integrations
-├── semantic/      # Semantic matching
-├── graph/         # Graph construction
-├── sync/          # Synchronization
-├── viz/           # Visualization
-└── monitoring/    # Logging and metrics
+.
+├── AGENTS.md
+├── FIRST_STEPS.md
+├── LICENSE
+├── README.md
+├── dev_tasks.md
+├── docs
+│   ├── architecture
+│   │   ├── agents.md
+│   │   ├── data_flow.md
+│   │   ├── data_structures.md
+│   │   ├── execution_layers.md
+│   │   ├── extension_points.md
+│   │   ├── manager_policy.md
+│   │   ├── semantic_routing.md
+│   │   ├── synchronization.md
+│   │   └── system_overview.md
+│   ├── interpretation.md
+│   ├── invariants.md
+│   ├── mic.md
+│   ├── planning
+│   │   └── resource_requirements.md
+│   ├── rationale
+│   │   ├── design_choices.md
+│   │   └── rejected_alternatives.md
+│   ├── reference
+│   │   ├── agents_example.md
+│   │   ├── dytopo.md
+│   │   ├── framework_api.md
+│   │   ├── llm_backends.md
+│   │   ├── llm_integration.md
+│   │   ├── semantic_routing_example.md
+│   │   └── synchronization_example.md
+│   ├── roadmap
+│   │   ├── deferred_features.md
+│   │   ├── phases.md
+│   │   └── risks.md
+│   └── testing
+│       └── strategy.md
+├── implementation_plan.md
+├── pyproject.toml
+├── src
+│   ├── noematics
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── core
+│   │   │   ├── __init__.py
+│   │   │   ├── __pycache__
+│   │   │   ├── interfaces.py
+│   │   │   └── mic.py
+│   │   ├── llm
+│   │   │   ├── __init__.py
+│   │   │   └── interpretation.py
+│   │   └── semantic
+│   │       ├── __init__.py
+│   │       ├── __pycache__
+│   │       ├── dytopo.py
+│   │       ├── encoder.py
+│   │       ├── matcher.py
+│   │       └── topology.py
+│   └── noematics.egg-info
+│       ├── PKG-INFO
+│       ├── SOURCES.txt
+│       ├── dependency_links.txt
+│       └── top_level.txt
+└── tests
+    ├── __init__.py
+    ├── __pycache__
+    └── mic
+        ├── __pycache__
+        ├── test_dytopo.py
+        └── test_minimal_core.py
 ```
 
 ### Configuration

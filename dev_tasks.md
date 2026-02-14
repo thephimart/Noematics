@@ -10,12 +10,12 @@ Tasks here assume familiarity with the core constraints.
 ### Implementation Plan
 
 1. **Extract & Formalize Invariants**
-   - Create `invariants.md` with 8 structural/temporal/interpretation invariants
+   - Create `docs/invariants.md` with 8 structural/temporal/interpretation invariants
    - Add formal mathematical notation for each
    - Include violation detection strategies
 
 2. **Formalize Interpretation Mechanics**
-   - Create `interpretation.md` with:
+   - Create `docs/interpretation.md` with:
      - Pure function specification
      - Input/output types
      - Delta composition rules
@@ -27,7 +27,7 @@ Tasks here assume familiarity with the core constraints.
    - Enforce: noema (semantic), node (graph only), agent (with role), field, link
    - Remove metaphorical reuse
 
-**Deliverable**: `invariants.md`, `interpretation.md`, updated `AGENTS.md`
+**Deliverable**: `docs/invariants.md`, `docs/interpretation.md`
 
 ---
 
@@ -96,3 +96,5 @@ No other development is considered in-scope without revisiting this decision.
    - Revisit only with a concrete, scoped objective
 
 **Current status**: paused by design.
+
+> This file is intentionally frozen unless Task C is revisited with a new scoped objective.
