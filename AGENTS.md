@@ -1,14 +1,12 @@
 # Noematics
 
-> "Noematics is a framework for modeling how noēmata evolve over dynamic topologies"
-
-Based on the DyTopo paper: https://arxiv.org/html/2602.06039v1
+Styled after the DyTopo paper: https://arxiv.org/html/2602.06039v1
 
 ---
 
 # AGENTS.md - Agent Coding Guidelines
 
-This file provides guidelines for agents operating in this repository.
+This file provides strict coding and behavioral constraints for agent implementations in this repository.
 
 ---
 
@@ -150,10 +148,6 @@ These files are **stable contracts**. Do not modify unless absolutely necessary:
 | `README.md` | Project overview and motivation |
 | `docs/invariants.md` | Formal system invariants — structural, temporal, interpretation |
 | `docs/interpretation.md` | Mechanical interpretation specification |
-
-### Additional Resources
-
-- **AGENTS.md** — Agent coding guidelines
 
 ---
 

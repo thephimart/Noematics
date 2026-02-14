@@ -5,6 +5,11 @@
 This document provides a comprehensive implementation plan for Noematics — a framework for modeling how noēmata evolve over dynamic topologies. Based on the Noematics paper (arXiv:2602.06039), this implementation enables dynamic semantic routing between multiple LLM agents for improved multi-round reasoning tasks.
 
 ---
+## Externel Documentation
+
+Operational semantics are defined in docs/mic.md
+
+Reference instantiations are documented under docs/reference/
 
 ## Noematic Invariants
 

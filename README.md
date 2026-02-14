@@ -1,10 +1,12 @@
 # Noematics
 
-> **Noematics is a framework for modeling how noēmata—structured units of meaning—evolve over dynamic interaction topologies.**
+> **Noematics is a framework for making semantic agreement, disagreement, and drift explicit in systems operating over dynamic interaction topologies.**
 
-Noematics is a systems framework for representing, updating, and interpreting meaning as a first-class, stateful structure embedded in evolving communication graphs. It is designed for multi-agent and distributed systems where *what is meant* changes over time, across perspectives, and under structural drift.
+Noematics is a systems framework for representing, updating, and interpreting meaning as a first-class, stateful structure, so that semantic agreement, disagreement, and drift remain explicit under change. It is designed for multi-agent and distributed systems where *what is meant* changes over time, across perspectives, and under structural drift.
 
 Unlike conventional graph, agent, or routing frameworks, Noematics treats **meaning itself**—not just messages, tokens, or policies—as the core object of computation.
+
+As a result, many systems exhibit apparent coordination or alignment while masking deep semantic divergence.
 
 ---
 
@@ -36,7 +38,7 @@ It introduces:
 - **Explicit separation of topology and interpretation**  
   Communication structure provides constraints; interpretation provides transformation.
 
-- **Invariant-constrained evolution**  
+- **Invariant-constrained evolution with explicit exposure of semantic divergence**  
   Meaning changes over time, but within formally stated system invariants.
 
 - **Observer-relative semantics without unconstrained subjectivity**  
