@@ -98,3 +98,23 @@ No other development is considered in-scope without revisiting this decision.
 **Current status**: paused by design.
 
 > This file is intentionally frozen unless Task C is revisited with a new scoped objective.
+
+## Sanity Checklist Verification — 2026-02-15
+
+An external verification pass (Codex) evaluated the repository against the
+9-point “one-screen sanity checklist”.
+
+**Result**: 9/9 checks pass.
+
+Summary:
+- Normative authority is unambiguous
+- MIC is the semantic anchor
+- Architecture vs reference separation is clean
+- Planning documents are non-normative
+- Terminology is consistent and single-source
+- Document tree matches mental model
+- Dead ends are intentional and preserved
+- No file misrepresents its authority
+- Project can stop here without loss of coherence
+
+This verification confirms the repository is in a stable, reviewable state.
